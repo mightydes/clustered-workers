@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "name": "node-app-hive",
+  "description": "Cluster based NodeJS process manager.",
+  "keywords": [
+    "pm",
+    "process manager",
+    "cluster"
+  ],
+  "author": {
+    "name": "Lev Nazarenko",
+    "email": "lynazarenko@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com:mightydes/node-app-hive.git"
+  },
+  "homepage": "https://github.com/mightydes/node-app-hive",
+  "bugs": {
+    "url": "https://github.com/mightydes/node-app-hive/issues"
+  },
+  "license": "MIT",
+  "main": "src/index.js",
+  "dependencies": {
+    "colors": "^1.1",
+    "debug": "^2.3",
+    "gaze": "^1.1",
+    "jslang-injector": "^1.0",
+    "underscore": "^1.8"
+  },
+  "devDependencies": {}
+}
