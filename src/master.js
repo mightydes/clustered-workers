@@ -147,15 +147,16 @@ class Master {
      * @param {String} command
      */
     performMasterCommandResponse(uid, command) {
+        const dateTime = this.util.getSystemDateTime();
         let out = {
             uid: uid,
-            response: `MASTER\n\t-no message-`
+            response: `MASTER ${dateTime}\n\t-no message-`
         };
         return new Promise((resolve) => {
             switch (command) {
                 case this.priv.status_arg:
                     const mb = this.util.getMemoryUsageMB();
-                    out.response = `MASTER\n\tMemory usage: ~${mb} mb`
+                    out.response = `MASTER ${dateTime}\n\tMemory usage: ~${mb} mb`
                         + `\n\tWatcher: ${this.watcherEnabled ? JSON.stringify(this.conf.watch_glob) : 'disabled'}`;
                     break;
             }

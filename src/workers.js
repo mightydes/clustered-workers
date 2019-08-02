@@ -46,19 +46,25 @@ class Workers {
         const socket = process.env[this.priv.worker_sock_key];
         const command = data.command;
         debug(`Worker '${socket}' command received:`, command);
+        const dateTime = this.util.getSystemDateTime();
         switch (command) {
+            case this.priv.status_arg:
+                const mb = this.util.getMemoryUsageMB();
+                data.response = `WORKER ${dateTime} ${socket}\n\tMemory usage: ~${mb} mb`;
+                process.send(data);
+                break;
             case this.priv.restart_arg:
-                data.response = `WORKER ${socket}\n\tReloading...`;
+                data.response = `WORKER ${dateTime} ${socket}\n\tRestarting...`;
                 process.send(data);
                 process.exit();
                 break;
-            case this.priv.status_arg:
-                const mb = this.util.getMemoryUsageMB();
-                data.response = `WORKER ${socket}\n\tMemory usage: ~${mb} mb`;
+            case this.priv.reload_arg:
+                data.response = `WORKER ${dateTime} ${socket}\n\tReloading...`;
                 process.send(data);
+                process.exit();
                 break;
             default:
-                data.response = `WORKER ${socket}\n\tInvalid command: '${command}'!`;
+                data.response = `WORKER ${dateTime} ${socket}\n\tInvalid command: '${command}'!`;
                 process.send(data);
         }
     }

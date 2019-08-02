@@ -88,18 +88,19 @@ class Util {
         const ttl = this.getPrivate().command_exec_ttl;
         switch (command) {
             case RELOAD_ARG:
-                return ttl * this.getConfig('numworkers') + 1000;
+                return ttl * this.getConfig().numworkers + 1000;
             default:
                 return ttl + 1000;
         }
     }
 
     getCommandExecTtl(command) {
+        const ttl = this.getPrivate().command_exec_ttl;
         switch (command) {
             case RELOAD_ARG:
-                return ttl * this.getConfig('numworkers');
+                return ttl * this.getConfig().numworkers;
             default:
-                return this.getPrivate().command_exec_ttl;
+                return ttl;
         }
     }
 
