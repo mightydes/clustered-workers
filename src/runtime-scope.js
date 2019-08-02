@@ -13,6 +13,7 @@ class RuntimeScope {
     createScope(argument) {
         switch (argument) {
             case this.priv.status_arg:
+            case this.priv.restart_arg:
             case this.priv.reload_arg:
                 return {
                     type: this.priv.cmd_runtime,

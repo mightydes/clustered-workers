@@ -1,11 +1,10 @@
 const net = require('net');
-const debug = require('debug')('nodeAppHive:command');
+const debug = require('debug')('node-app-hive:command');
 
 class Command {
 
     constructor(util) {
         this.util = util;
-        this.priv = util.getPrivate();
     }
 
     /**
@@ -27,10 +26,11 @@ class Command {
         const debugTask = `emit(${command})`;
         let result = '-no emit result-';
         return new Promise((resolve, reject) => {
-            this.util.log(`Emitting command:`, command);
+            const ttl = this.util.getCommandEmitTtl(command);
+            this.util.log(`Emitting command (ttl: ${ttl / 1000}sec):`, command);
 
             const socket = new net.Socket();
-            socket.setTimeout(this.priv.command_emit_ttl);
+            socket.setTimeout(ttl);
 
             // On connect:
             socket.on('connect', () => socket.write(command));

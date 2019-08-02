@@ -1,5 +1,5 @@
 const cluster = require('cluster');
-const debug = require('debug')('nodeAppHive:runtime');
+const debug = require('debug')('node-app-hive:runtime');
 const RuntimeScope = require('./runtime-scope');
 
 class Runtime {

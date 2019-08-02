@@ -55,8 +55,9 @@ To do so execute:
 
 `$ /home/my-app/app.js <command>`
 
-*   `status` -- get application status.
-*   `reload` -- get application workers.
+*   `status` -- get the application status.
+*   `restart` -- restart all workers.
+*   `reload` -- zero downtime workers reloading.
 
 ---
 

@@ -1,9 +1,10 @@
-const debug = require('debug')('nodeAppHive:commandResponse');
+const debug = require('debug')('node-app-hive:command-response');
 
 class CommandResponse {
 
     constructor(util, uid, command, onSubmit) {
         this.uid = uid;
+        this.command = command;
         this.taskMessage = `Processing command '${command}'...`;
         this.resMax = util.getConfig().numworkers + 1; // workers + master
         this.resCounter = 0;
@@ -41,6 +42,13 @@ class CommandResponse {
      */
     getTaskVerbose() {
         return this.taskMessage;
+    }
+
+    /**
+     * @returns {String}
+     */
+    getCommand() {
+        return this.command;
     }
 
     /**

@@ -1,9 +1,10 @@
 const cluster = require('cluster');
 const path = require('path');
 const _ = require('underscore');
-const debug = require('debug')('nodeAppHive:master');
+const debug = require('debug')('node-app-hive:master');
 const CommandResponse = require('./command-response');
 const Watcher = require('./watcher');
+const WorkerCommand = require('./signals/worker-command');
 
 class Master {
 
@@ -16,6 +17,7 @@ class Master {
         this._hive = {};
         this.commandResponse = CommandResponse.getInitial();
         this.watcherEnabled = false;
+        this.pollQueue = [];
     }
 
     run(argument) {
@@ -33,7 +35,7 @@ class Master {
         if (this.watcherEnabled) {
             const watcher = new Watcher(this.util);
             watcher.onWatch(() => this.util.log(`Watching for:`, JSON.stringify(this.conf.watch_glob)));
-            watcher.onChanged(() => this.command.emit(this.priv.reload_arg));
+            watcher.onChanged(() => this.command.emit(this.priv.restart_arg));
             watcher.run();
         }
     }
@@ -80,8 +82,17 @@ class Master {
 
         // Listen worker messages:
         worker.on('message', (data) => {
-            if (_.has(data, 'uid') && _.has(data, 'response') && data.uid === this.commandResponse.uid) {
-                this.commandResponse.add(data.response);
+            if (!_.has(data, 'type')) {
+                return;
+            }
+            if (data.type === 'WorkerCommand'
+                && data.uid === this.commandResponse.uid) {
+                return this.commandResponse.add(data.response);
+            }
+            if (data.type === 'WorkerReady'
+                && this.commandResponse.uid !== null
+                && this.commandResponse.getCommand() === this.priv.reload_arg) {
+                return this.popPollQueue();
             }
         });
 
@@ -127,7 +138,7 @@ class Master {
         // Handle command for workers:
         this.performWorkersCommandResponse(uid, command);
 
-        this.commandResponse.timeout(this.priv.command_poll_delay);
+        this.commandResponse.timeout(this.util.getCommandExecTtl(command));
     }
 
     /**
@@ -159,10 +170,26 @@ class Master {
      * @param {String} command
      */
     performWorkersCommandResponse(uid, command) {
-        _.each(this._hive, (worker) => worker.send({
-            uid: uid,
-            command: command
-        }));
+        const signal = new WorkerCommand(uid, command);
+        switch (command) {
+            case this.priv.reload_arg:
+                _.each(this._hive, (worker) => this.pollQueue.push(() => worker.send(signal.getBody())));
+                this.popPollQueue();
+                break;
+            default:
+                _.each(this._hive, (worker) => worker.send(signal.getBody()));
+                break;
+        }
+    }
+
+    /**
+     * @private
+     */
+    popPollQueue() {
+        if (this.pollQueue.length) {
+            const fn = this.pollQueue.pop();
+            fn();
+        }
     }
 
 }

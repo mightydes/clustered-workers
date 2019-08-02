@@ -1,5 +1,5 @@
 require('colors');
-const debug = require('debug')('nodeAppHive');
+const debug = require('debug')('node-app-hive');
 const Binder = require('./binder');
 
 module.exports = {

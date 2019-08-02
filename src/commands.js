@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
-const debug = require('debug')('nodeAppHive:commands');
+const debug = require('debug')('node-app-hive:commands');
 
 class Commands {
 
