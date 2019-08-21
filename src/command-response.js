@@ -14,7 +14,7 @@ class CommandResponse {
     }
 
     /**
-     * @param {String} strRes
+     * @param {string} strRes
      */
     add(strRes) {
         this.resCounter++;
@@ -38,14 +38,14 @@ class CommandResponse {
     }
 
     /**
-     * @returns {String}
+     * @returns {string}
      */
     getTaskVerbose() {
         return this.taskMessage;
     }
 
     /**
-     * @returns {String}
+     * @returns {string}
      */
     getCommand() {
         return this.command;

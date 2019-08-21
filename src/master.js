@@ -71,13 +71,13 @@ class Master {
 
     /**
      * @private
-     * @param {String} workerSocket
+     * @param {string} workerSocket
      */
     forkWorker(workerSocket) {
-        let env = {};
-        env[this.priv.worker_sock_key] = workerSocket;
+        let extEnv = {};
+        extEnv[this.priv.worker_sock_key] = workerSocket;
 
-        let worker = cluster.fork(env);
+        let worker = cluster.fork(extEnv);
         worker[this.priv.worker_sock_key] = workerSocket;
 
         // Listen worker messages:
@@ -113,7 +113,7 @@ class Master {
 
     /**
      * @private
-     * @param {String} command
+     * @param {string} command
      * @param {Socket} emitter
      */
     handleCommand(command, emitter) {
@@ -143,8 +143,8 @@ class Master {
 
     /**
      * @private
-     * @param {String} uid
-     * @param {String} command
+     * @param {string} uid
+     * @param {string} command
      */
     performMasterCommandResponse(uid, command) {
         const dateTime = this.util.getSystemDateTime();
@@ -167,8 +167,8 @@ class Master {
 
     /**
      * @private
-     * @param {String} uid
-     * @param {String} command
+     * @param {string} uid
+     * @param {string} command
      */
     performWorkersCommandResponse(uid, command) {
         const signal = new WorkerCommand(uid, command);

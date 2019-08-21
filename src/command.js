@@ -19,7 +19,7 @@ class Command {
     }
 
     /**
-     * @param {String} command
+     * @param {string} command
      * @returns {Promise}
      */
     emit(command) {

@@ -19,8 +19,7 @@ This application built upon a unix sockets, so you can use it only on unix based
     const path = require('path');
     const hive = require('node-app-hive');
 
-    hive.bind('example-node-app', {
-        env: process.env.APP_ENV,
+    hive.bind('example-node-app', () => {
         run_folder: path.normalize(`${__dirname}/run`),
         command_socket: '%namehive.command.sock',
         worker_script: require.resolve('./worker'),
@@ -57,7 +56,7 @@ To do so execute:
 
 *   `status` -- get the application status.
 *   `restart` -- restart all workers.
-*   `reload` -- zero downtime workers reloading.
+*   `reload` -- graceful (zero downtime) workers reloading.
 
 ---
 

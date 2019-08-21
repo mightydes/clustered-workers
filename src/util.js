@@ -27,7 +27,6 @@ const _private = {
 };
 
 const _defaultConfig = {
-    env: 'development',
     run_folder: '/tmp',
     command_socket: 'command.sock',
     worker_script: '',
@@ -39,12 +38,13 @@ const _defaultConfig = {
 class Util {
 
     /**
-     * @param {String} hiveName
-     * @param {Object} hiveConfig
+     * @param {string} hiveName
+     * @param {Function} configProvider
      */
-    constructor(hiveName, hiveConfig) {
+    constructor(hiveName, configProvider) {
         this.hiveName = hiveName;
-        this.config = _.extend(_defaultConfig, hiveConfig);
+        this.configProvider = configProvider;
+        this.config = null;
         this.commandSocket = null;
     }
 
@@ -53,6 +53,15 @@ class Util {
     }
 
     getConfig() {
+        if (this.config === null) {
+            let configProviderOut = typeof this.configProvider === 'function'
+                ? this.configProvider()
+                : null;
+
+            this.config = typeof configProviderOut === 'object'
+                ? Object.assign({}, _defaultConfig, configProviderOut)
+                : Object.assign({}, _defaultConfig);
+        }
         return this.config;
     }
 
@@ -109,9 +118,9 @@ class Util {
     }
 
     /**
-     * @param {String} str
+     * @param {string} str
      * @param {Object} sub
-     * @returns {String}
+     * @returns {string}
      */
     substituteStr(str, sub) {
         _.each(sub, (val, key) => {
@@ -121,8 +130,8 @@ class Util {
     }
 
     /**
-     * @param {String} socketFilePath
-     * @returns {String}
+     * @param {string} socketFilePath
+     * @returns {string}
      */
     prepSocket(socketFilePath) {
         debug('prepSocket', socketFilePath);
@@ -133,28 +142,28 @@ class Util {
         return socketFilePath;
     }
 
-    log(text) {
-        return this.stdOut('log', arguments, 'green');
+    log(...args) {
+        return this.stdOut('log', args, 'green');
     }
 
-    warn() {
-        return this.stdOut('warn', arguments, 'yellow');
+    warn(...args) {
+        return this.stdOut('warn', args, 'yellow');
     }
 
-    error() {
-        return this.stdOut('error', arguments, 'red');
+    error(...args) {
+        return this.stdOut('error', args, 'red');
     }
 
     /**
      * @private
-     * @param {String} method
+     * @param {string} method
      * @param {Object} args
-     * @param {String} color
+     * @param {string} color
      * @returns {*}
      */
     stdOut(method, args, color) {
         color || (color = 'white');
-        Array.prototype.unshift.call(args, `[${this.getSystemDateTime()}][${this.getHiveName()}][${this.getConfig().env}]`[color]);
+        Array.prototype.unshift.call(args, `[${this.getSystemDateTime()}][${this.getHiveName()}]`[color]);
         return console[method].apply(null, args);
     }
 
