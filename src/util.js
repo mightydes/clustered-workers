@@ -39,12 +39,11 @@ class Util {
 
     /**
      * @param {string} hiveName
-     * @param {Function} configProvider
+     * @param {Object} hiveConfig
      */
-    constructor(hiveName, configProvider) {
+    constructor(hiveName, hiveConfig = {}) {
         this.hiveName = hiveName;
-        this.configProvider = configProvider;
-        this.config = null;
+        this.config = Object.assign({}, _defaultConfig, hiveConfig);
         this.commandSocket = null;
     }
 
@@ -53,15 +52,6 @@ class Util {
     }
 
     getConfig() {
-        if (this.config === null) {
-            let configProviderOut = typeof this.configProvider === 'function'
-                ? this.configProvider()
-                : null;
-
-            this.config = typeof configProviderOut === 'object'
-                ? Object.assign({}, _defaultConfig, configProviderOut)
-                : Object.assign({}, _defaultConfig);
-        }
         return this.config;
     }
 

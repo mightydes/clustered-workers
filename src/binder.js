@@ -8,9 +8,9 @@ const Workers = require('./workers');
 
 class Binder {
 
-    constructor(hiveName, configProvider) {
+    constructor(hiveName, hiveConfig) {
         this.di = injector.create();
-        this.di.util = injector.service(['asProvider', () => new Util(hiveName, configProvider)]);
+        this.di.util = injector.service(['asProvider', () => new Util(hiveName, hiveConfig)]);
         this.di.runtimeScope = injector.service(RuntimeScope);
         this.di.runtime = injector.service(Runtime);
         this.di.command = injector.service(Command);
