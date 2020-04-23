@@ -34,6 +34,7 @@ class Workers {
             tcpPort = eval(tcpPort.replace(/[^-()\d/*+.]/g, ''));
             params = _.extend({port: tcpPort}, _.pick(options, ['host']));
         }
+        params.numworker = numworker;
 
         return params;
     }

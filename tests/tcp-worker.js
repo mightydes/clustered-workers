@@ -22,8 +22,8 @@ const server = http.createServer((req, res) => {
 });
 
 setTimeout(() => {
-    // server.listen(workerParams);
-    server.listen(8080);
+    server.listen(workerParams);
+    // server.listen(8080);
 }, listen_delay);
 
 process.on('SIGTERM', () => {

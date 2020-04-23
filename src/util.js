@@ -52,7 +52,7 @@ class Util {
      */
     substituteStr(str, sub) {
         _.each(sub, (val, key) => {
-            str = str.replace('%' + key, val);
+            str = `${str}`.replace('%' + key, val);
         });
         return str;
     }

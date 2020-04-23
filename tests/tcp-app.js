@@ -12,7 +12,8 @@ hive.bind('test-app', {
     },
     command_exec_time: 20000,
     worker_conn: {
-        port: '4001 + %numworker',
+        // port: '4001 + %numworker',
+        port: 8080,
         host: 'localhost'
     },
     worker_script: require.resolve('./tcp-worker'),
