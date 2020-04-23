@@ -1,71 +1,156 @@
-const debug = require('debug')('node-app-hive:workers');
 const _ = require('underscore');
-const WorkerReady = require('./signals/worker-ready');
+const debug = require('debug')('node-app-hive:workers');
+const Util = require('./util');
+const Signal = require('./signal');
 
 class Workers {
 
     constructor(util) {
         this.util = util;
-        this.priv = util.getPrivate();
         this.conf = util.getConfig();
+    }
 
+    /**
+     * @param {number} numworker
+     * @return {*}
+     */
+    createWorkerParams(numworker) {
+        const options = Object.assign({}, this.conf.worker_conn);
+
+        let params;
+        if (!options.port && options.path) {
+            // IPC socket used:
+            let socketPath = this.util.substituteStr(options.path, {
+                baserun: this.conf.baserun,
+                namehive: this.util.getHiveName(),
+                numworker: numworker
+            });
+            params = {path: socketPath};
+        } else {
+            // TCP port used:
+            let tcpPort = this.util.substituteStr(options.port, {
+                numworker: numworker
+            });
+            tcpPort = eval(tcpPort.replace(/[^-()\d/*+.]/g, ''));
+            params = _.extend({port: tcpPort}, _.pick(options, ['host']));
+        }
+
+        return params;
+    }
+
+    /**
+     * @param {*} paramsObj
+     * @return {string}
+     */
+    stringifyWorkerParams(paramsObj) {
+        return JSON.stringify(paramsObj);
+    }
+
+    /**
+     * @param {string} paramsStr
+     * @return {*}
+     */
+    parseWorkerParams(paramsStr) {
+        return JSON.parse(paramsStr);
     }
 
     runForked() {
-        const socket = process.env[this.priv.worker_sock_key];
-        this.util.log(`Run worker: ${socket}`);
+        const params = this.parseWorkerParams(process.env[Util.WORKER_PARAMS_KEY]);
+        this.util.log('Run worker', params);
 
-        // Listen for master commands:
-        process.on('message', (message) => this.handleMasterMessage(message));
+        // Listen for master messages:
+        process.on('message', (message) => {
+            const signal = Signal.parse(message);
+            if (signal instanceof Signal) {
+                this.handleSignalFromMaster(signal);
+            }
+        });
 
         // Run worker script:
-        this.util.prepSocket(socket);
+        this.util.unlinkSocketSync(params);
         const script = this.conf.worker_script;
         (function () {
             require(script);
         })();
-        const signal = new WorkerReady(socket);
-        process.send(signal.getBody());
+
+        // Emit 'ready' signal:
+        setTimeout(() => {
+            const signal = new Signal(Signal.types.W_M_READY);
+            this.setSignalData(signal, `Worker is ready.`);
+            process.send(signal.stringify());
+        }, this.conf.worker_startup_time)
     }
 
     /**
      * @private
-     * @param {*} message
+     * @param {Signal} reqSignal
      */
-    handleMasterMessage(message) {
-        if (_.isObject(message) && message.type === 'WorkerCommand') {
-            this.handleMasterCommand(message);
+    handleSignalFromMaster(reqSignal) {
+        const workerKey = process.env[Util.WORKER_PARAMS_KEY];
+        const type = reqSignal.getType();
+        this.util.log(`Worker '${workerKey}' is handling signal '${type}'...`.cyan);
+        let messages = [];
+        let resSignalType;
+        let onSend = undefined;
+
+        switch (type) {
+            case Signal.types.M_W_STATUS_REQ:
+                const mb = this.util.getMemoryUsageMB();
+                messages = [`Memory usage: ~${mb} mb`];
+                resSignalType = Signal.types.W_M_STATUS_RES;
+                break;
+            case Signal.types.M_W_RESTART_REQ:
+                messages = [`Restarting...`];
+                resSignalType = Signal.types.W_M_RESTART_RES;
+                onSend = () => this.shutdown();
+                break;
+            case Signal.types.M_W_RELOAD_REQ:
+                messages = [`Reloading...`];
+                resSignalType = Signal.types.W_M_RELOAD_RES;
+                onSend = () => this.shutdown();
+                break;
+            default:
+                return this.util.warn(`Unhandled signal type: ${type}!`);
+        }
+
+        const resSignal = new Signal(resSignalType, reqSignal.getUid());
+        this.setSignalData(resSignal, messages);
+        process.send(resSignal.stringify());
+        if (typeof onSend === 'function') {
+            onSend();
         }
     }
 
     /**
      * @private
-     * @param {Object} data
+     * @param {Signal} signal
+     * @param {string|Array} messages
      */
-    handleMasterCommand(data) {
-        const socket = process.env[this.priv.worker_sock_key];
-        const command = data.command;
-        debug(`Worker '${socket}' command received:`, command);
-        const dateTime = this.util.getSystemDateTime();
-        switch (command) {
-            case this.priv.status_arg:
-                const mb = this.util.getMemoryUsageMB();
-                data.response = `WORKER ${dateTime} ${socket}\n\tMemory usage: ~${mb} mb`;
-                process.send(data);
-                break;
-            case this.priv.restart_arg:
-                data.response = `WORKER ${dateTime} ${socket}\n\tRestarting...`;
-                process.send(data);
-                process.exit();
-                break;
-            case this.priv.reload_arg:
-                data.response = `WORKER ${dateTime} ${socket}\n\tReloading...`;
-                process.send(data);
-                process.exit();
-                break;
+    setSignalData(signal, messages) {
+        if (typeof messages === 'string') {
+            messages = [messages];
+        }
+        if (!Array.isArray(messages)) {
+            throw new Error(`Invalid 'messages' argument type: '${typeof messages}'!`);
+        }
+        const dateTime = Util.getSystemDateTime();
+        const workerKey = process.env[Util.WORKER_PARAMS_KEY];
+        signal.setData({dateTime, messages, workerKey});
+    }
+
+    /**
+     * @private
+     * @return {*}
+     */
+    shutdown() {
+        const policy = this.conf.exit_policy;
+        switch (policy) {
+            case Util.exitPolicies.halt:
+                return process.exit();
+            case Util.exitPolicies.SIGTERM:
+                return process.emit('SIGTERM');
             default:
-                data.response = `WORKER ${dateTime} ${socket}\n\tInvalid command: '${command}'!`;
-                process.send(data);
+                throw new Error(`Invalid exit policy: '${policy}'!`);
         }
     }
 

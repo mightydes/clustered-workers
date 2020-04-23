@@ -1,58 +1,86 @@
 const cluster = require('cluster');
-const path = require('path');
 const _ = require('underscore');
 const debug = require('debug')('node-app-hive:master');
-const CommandResponse = require('./command-response');
+const Util = require('./util');
 const Watcher = require('./watcher');
-const WorkerCommand = require('./signals/worker-command');
+const CommandHandler = require('./command-handler');
+const Signal = require('./signal');
 
 class Master {
 
     constructor(util, command, workers) {
         this.util = util;
-        this.priv = util.getPrivate();
         this.conf = util.getConfig();
         this.command = command;
         this.workers = workers;
         this._hive = {};
-        this.commandResponse = CommandResponse.getInitial();
+        this.commandHandler = new CommandHandler(this, util);
         this.watcherEnabled = false;
-        this.pollQueue = [];
     }
 
     run(argument) {
         this.util.log(`Run master`);
 
-        this.createCommandListener();
+        this.command.startListener(this.commandHandler);
 
         // Fork workers:
         this.forkWorkers();
         cluster.on('exit', (worker) => this.reSpawnWorker(worker));
 
         // Handle watcher:
-        this.watcherEnabled = argument === this.priv.watch_arg;
+        this.watcherEnabled = argument === Util.WATCH_ARG;
         debug('watcherEnabled', this.watcherEnabled);
         if (this.watcherEnabled) {
             const watcher = new Watcher(this.util);
-            watcher.onWatch(() => this.util.log(`Watching for:`, JSON.stringify(this.conf.watch_glob)));
-            watcher.onChanged(() => this.command.emit(this.priv.restart_arg));
+            watcher.onWatch(() => this.util.log(`Watching for:`, this.conf.watch_glob));
+            watcher.onChanged(() => this.command.emit(Util.RESTART_ARG));
             watcher.run();
         }
     }
 
     /**
-     * @private
+     * @param {Signal} reqSignal
+     * @return {Function}
      */
-    createCommandListener() {
-        const server = this.command.createServer();
-        server.on('connection', (emitter) => {
-            debug('Command emitter connected...');
-            emitter.on('data', (data) => {
-                const command = data.toString();
-                this.util.log('Received emitted command:', command);
-                this.handleCommand(command, emitter);
-            });
-        });
+    getMasterCommandStarter(reqSignal) {
+        return () => {
+            const type = reqSignal.getType();
+            const uid = reqSignal.getUid();
+            const dateTime = Util.getSystemDateTime();
+            let messages = [];
+            let resSignalType;
+            switch (type) {
+                case Signal.types.M_M_STATUS_REQ:
+                    const mb = this.util.getMemoryUsageMB();
+                    messages = [
+                        `Memory usage: ~${mb} mb`,
+                        this.commandHandler.getStatus(),
+                        `Watcher: ${this.watcherEnabled ? JSON.stringify(this.conf.watch_glob) : 'disabled'}`,
+                    ];
+                    resSignalType = Signal.types.M_M_STATUS_RES;
+                    break;
+                case Signal.types.M_M_RESTART_REQ:
+                    messages = [`You should not restart master application.`];
+                    resSignalType = Signal.types.M_M_RESTART_RES;
+                    break;
+                case Signal.types.M_M_RELOAD_REQ:
+                    messages = [`You should not reload master application.`];
+                    resSignalType = Signal.types.M_M_RELOAD_RES;
+                    break;
+                default:
+                    return this.util.warn(`Unhandled signal type: ${type}!`);
+            }
+            const resSignal = new Signal(resSignalType, uid);
+            resSignal.setData({dateTime, messages});
+            this.commandHandler.notify(resSignal);
+        };
+    }
+
+    /**
+     * @param {Function} fn
+     */
+    eachWorker(fn) {
+        _.each(this._hive, (val, key) => fn(val, key));
     }
 
     /**
@@ -60,45 +88,33 @@ class Master {
      */
     forkWorkers() {
         for (let k = 0; k < this.conf.numworkers; k++) {
-            let workerSocket = this.util.substituteStr(this.conf.worker_socket, {
-                namehive: this.util.getHiveName(),
-                numworker: k
-            });
-            workerSocket = path.join(this.conf.run_folder, workerSocket);
-            this.forkWorker(workerSocket);
+            const workerParams = this.workers.createWorkerParams(k);
+            this.forkWorker(this.workers.stringifyWorkerParams(workerParams));
         }
     }
 
     /**
      * @private
-     * @param {string} workerSocket
+     * @param {string} workerParamsStr
      */
-    forkWorker(workerSocket) {
+    forkWorker(workerParamsStr) {
         let extEnv = {};
-        extEnv[this.priv.worker_sock_key] = workerSocket;
+        extEnv[Util.WORKER_PARAMS_KEY] = workerParamsStr;
 
         let worker = cluster.fork(extEnv);
-        worker[this.priv.worker_sock_key] = workerSocket;
+        worker[Util.WORKER_PARAMS_KEY] = workerParamsStr;
 
-        // Listen worker messages:
-        worker.on('message', (data) => {
-            if (!_.has(data, 'type')) {
-                return;
-            }
-            if (data.type === 'WorkerCommand'
-                && data.uid === this.commandResponse.uid) {
-                return this.commandResponse.add(data.response);
-            }
-            if (data.type === 'WorkerReady'
-                && this.commandResponse.uid !== null
-                && this.commandResponse.getCommand() === this.priv.reload_arg) {
-                return this.popPollQueue();
+        // Listen for worker messages:
+        worker.on('message', (message) => {
+            const signal = Signal.parse(message);
+            if (signal instanceof Signal) {
+                this.commandHandler.notify(signal);
             }
         });
 
-        this._hive[workerSocket] = worker;
+        this._hive[workerParamsStr] = worker;
 
-        debug('Forked worker:', workerSocket);
+        debug('Forked worker:', workerParamsStr);
     }
 
     /**
@@ -106,91 +122,9 @@ class Master {
      * @param {Object} worker
      */
     reSpawnWorker(worker) {
-        const workerSocket = worker[this.priv.worker_sock_key];
-        this.util.warn(`Re-spawning worker:`, workerSocket);
-        this.forkWorker(workerSocket);
-    }
-
-    /**
-     * @private
-     * @param {string} command
-     * @param {Socket} emitter
-     */
-    handleCommand(command, emitter) {
-        if (this.commandResponse.uid !== null) {
-            return emitter.end(this.commandResponse.getTaskVerbose());
-        }
-
-        const uid = _.uniqueId('commandResponse');
-        this.commandResponse = new CommandResponse(this.util, uid, command, (results) => {
-            emitter.end(results);
-            this.commandResponse = CommandResponse.getInitial();
-        });
-
-        // Handle command for master:
-        this.performMasterCommandResponse(uid, command)
-            .then((data) => {
-                if (uid === data.uid) {
-                    this.commandResponse.add(data.response);
-                }
-            });
-
-        // Handle command for workers:
-        this.performWorkersCommandResponse(uid, command);
-
-        this.commandResponse.timeout(this.util.getCommandExecTtl(command));
-    }
-
-    /**
-     * @private
-     * @param {string} uid
-     * @param {string} command
-     */
-    performMasterCommandResponse(uid, command) {
-        const dateTime = this.util.getSystemDateTime();
-        let out = {
-            uid: uid,
-            response: `MASTER ${dateTime}\n\t-no message-`
-        };
-        return new Promise((resolve) => {
-            switch (command) {
-                case this.priv.status_arg:
-                    const mb = this.util.getMemoryUsageMB();
-                    out.response = `MASTER ${dateTime}\n\tMemory usage: ~${mb} mb`
-                        + `\n\tWatcher: ${this.watcherEnabled ? JSON.stringify(this.conf.watch_glob) : 'disabled'}`;
-                    break;
-            }
-            debug('Master responded with message:', out);
-            return resolve(out);
-        });
-    }
-
-    /**
-     * @private
-     * @param {string} uid
-     * @param {string} command
-     */
-    performWorkersCommandResponse(uid, command) {
-        const signal = new WorkerCommand(uid, command);
-        switch (command) {
-            case this.priv.reload_arg:
-                _.each(this._hive, (worker) => this.pollQueue.push(() => worker.send(signal.getBody())));
-                this.popPollQueue();
-                break;
-            default:
-                _.each(this._hive, (worker) => worker.send(signal.getBody()));
-                break;
-        }
-    }
-
-    /**
-     * @private
-     */
-    popPollQueue() {
-        if (this.pollQueue.length) {
-            const fn = this.pollQueue.pop();
-            fn();
-        }
+        const workerParamsStr = worker[Util.WORKER_PARAMS_KEY];
+        this.util.warn(`Re-spawning worker:`, workerParamsStr);
+        this.forkWorker(workerParamsStr);
     }
 
 }

@@ -1,8 +1,9 @@
+const Util = require('./util');
+
 class RuntimeScope {
 
     constructor(util) {
         this.util = util;
-        this.priv = util.getPrivate();
     }
 
     handle() {
@@ -32,14 +33,14 @@ class RuntimeScope {
      * @returns {boolean}
      */
     isCommand() {
-        return this.getType() === this.priv.cmd_runtime;
+        return this.getType() === Util.CMD_RUNTIME;
     }
 
     /**
      * @returns {boolean}
      */
     isApplication() {
-        return this.getType() === this.priv.app_runtime;
+        return this.getType() === Util.APP_RUNTIME;
     }
 
     /**
@@ -48,7 +49,7 @@ class RuntimeScope {
      * @returns {boolean}
      */
     isAllowedArgument(argument) {
-        return this.priv.allowed_arguments.indexOf(argument) > -1;
+        return RuntimeScope.allowedArguments.indexOf(argument) > -1;
     }
 
     /**
@@ -58,27 +59,34 @@ class RuntimeScope {
      */
     createScope(argument) {
         switch (argument) {
-            case this.priv.status_arg:
-            case this.priv.restart_arg:
-            case this.priv.reload_arg:
+            case Util.STATUS_ARG:
+            case Util.RESTART_ARG:
+            case Util.RELOAD_ARG:
                 return {
-                    type: this.priv.cmd_runtime,
+                    type: Util.CMD_RUNTIME,
                     argument: argument
                 };
-            case this.priv.watch_arg:
+            case Util.WATCH_ARG:
                 return {
-                    type: this.priv.app_runtime,
+                    type: Util.APP_RUNTIME,
                     argument: argument
                 };
             default:
                 return {
-                    type: this.priv.app_runtime,
+                    type: Util.APP_RUNTIME,
                     argument: null
                 };
         }
     }
 
 }
+
+RuntimeScope.allowedArguments = [
+    Util.STATUS_ARG,
+    Util.RESTART_ARG,
+    Util.RELOAD_ARG,
+    Util.WATCH_ARG,
+];
 
 RuntimeScope.__injectOptions = ['asProvider', (di) => new RuntimeScope(di.util())];
 

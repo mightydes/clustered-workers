@@ -37,24 +37,23 @@ class Runtime {
      * @param {string} command
      */
     emitCommand(command) {
-        return this.command.emit(command)
-            .then((result) => {
-                this.printCommandResult(command, result);
+        this.util.log(`:: Emitting command ::`, `${command}`.yellow);
+
+        const options = {
+            onData: (data) => this.util.log(data.toString())
+        };
+
+        return this.command.emit(command, options)
+            .then(() => {
+                debug(`Resolved command '${command}'.`);
+                this.util.log(`Done.`.green);
                 this.util.halt();
             })
             .catch((e) => {
+                debug(`Rejected command '${command}'.`);
                 this.util.error(e);
                 this.util.halt();
             });
-    }
-
-    /**
-     * @private
-     * @param {string} command
-     * @param {string} strRes
-     */
-    printCommandResult(command, strRes) {
-        this.util.log(`\n-----${command.toUpperCase()}-----\n${strRes}\n`);
     }
 
 }

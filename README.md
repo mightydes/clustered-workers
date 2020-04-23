@@ -1,8 +1,7 @@
 # node-app-hive
 
 Cluster based NodeJS process manager.
-
-This application built upon a unix sockets, so you can use it only on unix based (Linux) platforms.
+TCP ports or IPC sockets can be used.
 
 ---
 
@@ -19,11 +18,21 @@ This application built upon a unix sockets, so you can use it only on unix based
     const path = require('path');
     const hive = require('node-app-hive');
 
+    // Using TCP ports:
     hive.bind('example-node-app', {
-        run_folder: path.normalize(`${__dirname}/run`),
-        command_socket: '%namehive.command.sock',
+        command_conn: {
+            port: 4000,
+            host: 'localhost',
+            // -OR- Using IPC:
+            //path: path.normalize(`${__dirname}/run`) + '/%namehive.command.sock'
+        },
+        worker_conn: {
+            port: '4001 + %numworker',
+            host: 'localhost',
+            // -OR- Using IPC:
+            //path: path.normalize(`${__dirname}/run`) + '%namehive.worker%numworker.sock'
+        },
         worker_script: require.resolve('./worker'),
-        worker_socket: '%namehive.worker%numworker.sock',
         numworkers: 1,
         watch_glob: [`/home/my-app/src/**/*.{js,json}`]
     }).runtime();
@@ -65,23 +74,53 @@ To do so execute:
 While master is running, it watches for the workers being alive.
 If some worker would be terminated, then master will re-spawn that worker immediately.
 You should persist the master script by yourself.
-For example, you can use [supervisord](http://supervisord.org) service:
 
-_/etc/supervisord.d/node_proxy_app.ini_
+For example, using systemd:
+
 ```ini
-[program:node_proxy_app]
-command=sh /home/my-app/app.js
-numprocs=1
-user=www-data
-directory=/home/my-app/
-autostart=true
-autorestart=true
-startretries=3
-stopsignal=TERM
-stdout_logfile=/var/log/node_proxy_app/out.log
-stdout_logfile_maxbytes=1MB
-stdout_logfile_backups=10
-stderr_logfile=/var/log/node_proxy_app/err.log
-stderr_logfile_maxbytes=1MB
-stderr_logfile_backups=10
+[Unit]
+Description=Sample Clustered Node Application
+
+[Service]
+WorkingDirectory=/home/my-app
+ExecStart=/usr/bin/sh /home/my-app/app.js
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=node-sample-app
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+## Exit policy
+
+When you emitting `restart` or `reload` command, by default used simple `halt` policy,
+which invoking `process.exit()` for each worker node.
+
+Alternatively you can use `exit_policy: 'SIGTERM'`.
+In this case, you should manually handle `SIGTERM` signal in your worker script.
+For example:
+
+```javascript
+const http = require('http');
+
+http.createServer((req, res) => {
+    res.writeHead(200, {'Content-Type': 'text/plain'});
+    res.write('Hello World!');
+    res.end();
+}).listen(8080);
+
+process.on('SIGTERM', () => {
+    console.info('SIGTERM signal received.');
+    console.log('Closing http server.');
+    server.close(() => {
+        console.log('Http server closed.');
+        process.exit();
+    });
+});
 ```

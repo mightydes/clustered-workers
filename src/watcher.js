@@ -4,6 +4,7 @@ class Watcher {
 
     constructor(util) {
         this.util = util;
+        this.conf = util.getConfig();
         this._onWatch = () => {
         };
         this._onChanged = () => {
@@ -31,7 +32,7 @@ class Watcher {
         }
         this.isWatching = true;
 
-        const glob = this.util.getConfig().watch_glob;
+        const glob = this.conf.watch_glob;
         if (!glob) {
             throw new Error(`Invalid 'watch_glob' parameter!`);
         }
@@ -41,7 +42,7 @@ class Watcher {
                 this._onWatch();
                 watcher.on('changed', () => this._onChanged());
             });
-        }, this.util.getPrivate().watch_delay);
+        }, this.conf.watch_delay);
     }
 
 }
