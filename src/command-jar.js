@@ -179,7 +179,7 @@ class CommandJar {
             const cred = Signal.isMasterType(type)
                 ? `:: MASTER ::`.yellow
                 : `:: WORKER ${data.workerKey} ::`.cyan;
-            const msg = `${cred}\n\t` + data.messages.join('\n\t');
+            const msg = `${cred}\n\t` + data.messages.join('\n\t') + `\n`;
             this.emitter.write(msg);
         }
     }
